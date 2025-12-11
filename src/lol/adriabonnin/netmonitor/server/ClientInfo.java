@@ -2,7 +2,9 @@ package lol.adriabonnin.netmonitor.server;
 
 import java.net.InetAddress;
 
-// Guarda la informació bàsica d'un client per enviar-li UDP
+/**
+ * Guarda la informació bàsica d'un client per enviar-li UDP.
+ */
 public class ClientInfo {
     private final InetAddress adreca;
     private final int portUdp;

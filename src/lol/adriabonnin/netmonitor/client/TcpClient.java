@@ -4,6 +4,11 @@ import java.io.*;
 import java.net.*;
 import java.util.Scanner;
 
+/**
+ * Client que obre connexió TCP amb el servidor i també un socket UDP per rebre notificacions.
+ * - envia "UDPPORT <portLocal>" per registrar-se
+ * - pot enviar comandes: TIME, ECHO <text>, COUNT, BYE, SHUTDOWN
+ */
 public class TcpClient {
 
     public static final String HOST = "localhost";
@@ -13,7 +18,9 @@ public class TcpClient {
 
         DatagramSocket socketUdp = null;
         Socket socketTcp = null;
-        UdpNotificationListener listener = null;
+        UdpNotificationListener udpListener = null;
+        TcpListener tcpListener = null;
+        Thread tcpThread = null;
 
         try {
             // Crear port UDP propi
@@ -26,13 +33,17 @@ public class TcpClient {
             BufferedReader entrada = new BufferedReader(new InputStreamReader(socketTcp.getInputStream()));
             PrintWriter sortida = new PrintWriter(socketTcp.getOutputStream(), true);
 
-            // Iniciar fil de notificacions
-            listener = new UdpNotificationListener(socketUdp);
-            new Thread(listener).start();
+            // Iniciar TcpListener (opcional: si voleu veure respostes TCP asíncrones)
+            tcpListener = new TcpListener(entrada);
+            tcpThread = new Thread(tcpListener);
+            tcpThread.start();
+
+            // Iniciar fil de notificacions UDP
+            udpListener = new UdpNotificationListener(socketUdp);
+            new Thread(udpListener).start();
 
             // Registrar UDPPORT al servidor
             sortida.println("UDPPORT " + portLocalUdp);
-            System.out.println("Servidor: " + entrada.readLine());
 
             // Menú
             Scanner sc = new Scanner(System.in);
@@ -43,22 +54,22 @@ public class TcpClient {
             while (true) {
                 System.out.print("> ");
                 comanda = sc.nextLine();
+                if (comanda == null || comanda.trim().isEmpty()) continue;
 
                 sortida.println(comanda);
-                String resposta = entrada.readLine();
 
-                if (resposta != null)
-                    System.out.println("Servidor: " + resposta);
-
-                if (comanda.equalsIgnoreCase("BYE") || comanda.equalsIgnoreCase("SHUTDOWN"))
-                    break;
+                // No llegim resposta directament: TcpListener s'encarrega d'imprimir respostes i ECHO TCP.
+                if (comanda.equalsIgnoreCase("BYE") || comanda.equalsIgnoreCase("SHUTDOWN")) break;
             }
 
         } catch (Exception e) {
             System.err.println("Error client: " + e.getMessage());
         } finally {
-            if (listener != null) listener.aturar();
+            if (tcpListener != null) tcpListener.aturar();
+            try { if (tcpThread != null) tcpThread.join(1000); } catch (InterruptedException ignored) {}
+            if (udpListener != null) udpListener.aturar();
             try { if (socketTcp != null) socketTcp.close(); } catch (Exception ignored) {}
+            if (socketUdp != null && !socketUdp.isClosed()) socketUdp.close();
             System.out.println("Client tancat.");
         }
     }
